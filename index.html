@@ -1,16 +1,14 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Furniture ERP — PWA v1.2</title>
+  <title>Furniture ERP — PWA v1.3</title>
   <meta name="theme-color" content="#111111">
   <link rel="manifest" href="manifest.json">
   <style>
     :root { --bg:#0f0f10; --fg:#f2f2f3; --muted:#b9bcc2; --card:#1a1b1e; --acc:#4da3ff; --good:#16a34a; --bad:#ef4444; --warn:#f59e0b; }
-    @media (prefers-color-scheme: light) {
-      :root { --bg:#f7f7f8; --fg:#0f1115; --muted:#475569; --card:#ffffff; --acc:#2563eb; }
-    }
+    @media (prefers-color-scheme: light) { :root { --bg:#f7f7f8; --fg:#0f1115; --muted:#475569; --card:#ffffff; --acc:#2563eb; } }
     * { box-sizing: border-box; }
     body { margin:0; background:var(--bg); color:var(--fg); font: 15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, 'Helvetica Neue', Arial; }
     header { position:sticky; top:0; z-index:10; backdrop-filter:saturate(1.2) blur(8px); background:#111a; border-bottom:1px solid #0004; }
@@ -19,7 +17,7 @@
     .tabs { display:flex; gap:.4rem; flex-wrap:wrap; margin-left:auto; }
     .tab { border:1px solid #0004; padding:.45rem .7rem; border-radius:9px; cursor:pointer; background:var(--card); color:var(--fg); user-select:none; }
     .tab.active { outline:2px solid var(--acc); }
-    main { max-width:1200px; margin: 1rem auto; padding: 0 .9rem 2rem; }
+    main { max-width:1200px; margin: 1rem auto; padding: 0 .9rem 4rem; }
     .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:.9rem; margin:1rem 0; }
     .kpi { background:var(--card); border:1px solid #0004; border-radius:12px; padding:1rem; }
     .muted { color:var(--muted); }
@@ -32,8 +30,14 @@
     th, td { padding:.6rem .7rem; border-bottom:1px solid #0002; text-align:left; white-space:nowrap; }
     th { position:sticky; top:0; background:#1f2226; }
     tr.selected { outline: 2px solid var(--acc); }
-    .section { margin: 1rem 0 1.4rem; }
-    .help { font-size:12px; color:var(--muted); }
+    .fab { position:fixed; right:18px; bottom:18px; background:var(--acc); color:#fff; border:none; border-radius:999px; padding:14px 18px; font-weight:700; cursor:pointer; box-shadow:0 10px 30px #0006; }
+    .fab small { display:block; font-weight:400; opacity:.8; }
+    /* Modal */
+    .modal-back { position:fixed; inset:0; background:#0008; display:none; align-items:center; justify-content:center; padding:1rem; z-index:50; }
+    .modal { width:min(680px, 100%); background:var(--card); border:1px solid #0005; border-radius:14px; padding:1rem; }
+    .modal h3 { margin:.2rem 0 1rem; }
+    .modal .row { display:grid; grid-template-columns:150px 1fr; align-items:center; gap:.6rem; margin:.5rem 0; }
+    .modal .actions { display:flex; gap:.6rem; justify-content:flex-end; margin-top:1rem; }
   </style>
 </head>
 <body>
@@ -64,8 +68,8 @@
     <div class="toolbar">
       <input id="ordersSearch" placeholder="Search">
       <select id="ordersStatus"></select>
-      <button id="addOrderBtn" class="primary">+ New order</button>
-      <button id="assignManagerBtn">Assign manager</button>
+      <button id="btnNewClient" class="primary">+ New client</button>
+      <button id="btnNewOrder" class="primary">+ New order (guided)</button>
       <button id="saveOrders">Save</button>
     </div>
     <div class="grid"><table id="ordersTable"></table></div>
@@ -91,30 +95,17 @@
 
   <section id="tools" class="view" hidden>
     <h2>Tools</h2>
-    <div class="section">
-      <h3>Create invoice by Order ID</h3>
-      <div class="toolbar">
-        <input id="ciOrderId" placeholder="Order ID">
-        <button id="ciCreate" class="primary">Create invoice</button>
-      </div>
-    </div>
-    <div class="section">
-      <h3>Delete Hardware in PO</h3>
-      <div class="toolbar">
-        <input id="delOrderId" placeholder="Order ID (for mode 2)">
-        <select id="delMode">
-          <option value="1">1 — Delete selected row</option>
-          <option value="2">2 — Delete all Hardware by Order ID</option>
-        </select>
-        <button id="delGo" class="danger">Delete</button>
-      </div>
+    <div class="toolbar">
+      <input id="ciOrderId" placeholder="Order ID">
+      <button id="ciCreate" class="primary">Create invoice</button>
+      <span class="muted">IssueDate=today, DueDate=+21d, Amount from order Total/Amount.</span>
     </div>
   </section>
 
   <section id="import" class="view" hidden>
     <h2>Import / Export</h2>
     <div style="display:grid; gap:.8rem; max-width:700px;">
-      <button id="exportBtn">⬇ Экспорт JSON</button>
+      <button id="exportBtn">⬇ Export JSON</button>
       <input type="file" id="importFile" accept="application/json">
       <button id="resetBtn">↺ Reset to initial</button>
     </div>
@@ -122,36 +113,86 @@
 
   <section id="about" class="view" hidden>
     <h2>About</h2>
-    <p>Version v1.1 (safe data loading via fetch). If buttons don't work — open DevTools → Console and share the error screenshot.</p>
+    <p>Version v1.3 — guided workflow: Client → Order → (optional) Invoice/PO. Modals added.</p>
   </section>
 </main>
 
+<button class="fab" id="fabStart">+ Start<br><small>Client → Order</small></button>
+
+<!-- Client modal -->
+<div class="modal-back" id="modalClientBack">
+  <div class="modal">
+    <h3>New client</h3>
+    <div class="row"><label>Client ID</label><input id="clId" placeholder="auto"></div>
+    <div class="row"><label>Name</label><input id="clName" placeholder="Full name"></div>
+    <div class="row"><label>Phone</label><input id="clPhone" placeholder="+1 ..."></div>
+    <div class="row"><label>Email</label><input id="clEmail" placeholder="name@mail.com"></div>
+    <div class="row"><label>Address</label><input id="clAddr" placeholder=""></div>
+    <div class="actions">
+      <button id="clCancel">Cancel</button>
+      <button id="clSave" class="primary">Save client</button>
+    </div>
+  </div>
+</div>
+
+<!-- Order modal -->
+<div class="modal-back" id="modalOrderBack">
+  <div class="modal">
+    <h3>New order</h3>
+    <div class="row"><label>Order ID</label><input id="orId" placeholder="auto"></div>
+    <div class="row"><label>Client ID</label><input id="orClientId" placeholder="auto from client" disabled></div>
+    <div class="row"><label>Status</label>
+      <select id="orStatus">
+        <option>New</option>
+        <option>In Production</option>
+        <option>On Hold</option>
+        <option>Installed</option>
+        <option>Closed</option>
+        <option>Cancelled</option>
+      </select>
+    </div>
+    <div class="row"><label>Total</label><input id="orTotal" placeholder="0.00"></div>
+    <div class="actions">
+      <button id="orCancel">Cancel</button>
+      <button id="orSave" class="primary">Save order</button>
+    </div>
+  </div>
+</div>
+
 <script>
-const KEY = "furniture_erp_data_v11";
+// ---- Storage / data ----
+const KEY = "furniture_erp_data_v13";
 let db = null;
 const tables = {};
+
 function $(sel){ return document.querySelector(sel); }
 function el(tag, attrs={}, children=[]){ const n=document.createElement(tag); for(const[k,v]of Object.entries(attrs)){ if(k==="text")n.textContent=v; else if(k==="html")n.innerHTML=v; else n.setAttribute(k,v);} for(const c of children) n.appendChild(c); return n; }
 function unique(a){ return [...new Set(a)]; }
 function toNumber(x){ const n=parseFloat(String(x||"").replace(/[^0-9.\-]/g,"")); return isNaN(n)?0:n; }
 function fmtDate(d){ const z=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`; }
 
+function setData(obj){ localStorage.setItem(KEY, JSON.stringify(obj)); }
+function getData(){ const raw=localStorage.getItem(KEY); return raw?JSON.parse(raw):null; }
+
 function detectTables(){
   const names = Object.keys(db).map(n=>n.toLowerCase());
   const find = (cands, fb="") => { for(const c of cands){ const i=names.indexOf(c); if(i>=0) return Object.keys(db)[i]; } return Object.keys(db)[0]||fb; };
-  tables.orders = find(["orders","заказы","order","active orders","orders list"]);
+  tables.orders = find(["orders","order","заказы","active orders"]);
   tables.invoices = find(["invoices","invoice","инвойсы","инвойс"]);
   tables.pos = find(["hardwarepo","hardware po","po","purchase orders","закупки"]);
-  tables.managers = find(["managers","менеджеры","сотрудники"], "");
+  tables.clients = find(["clients","client","customers","клиенты","клиент"]);
 }
 
-function renderTable(sel, rows, opts={}){
+function detectField(obj, patterns){ const keys=Object.keys(obj||{}); for(const p of patterns){ const re=new RegExp(p,"i"); const k=keys.find(k=>re.test(k)); if(k) return k; } return null; }
+
+// ---- Rendering ----
+function renderTable(sel, rows){
   const table = $(sel); table.innerHTML="";
   if(!rows||!rows.length){ table.innerHTML="<tr><td class='muted'>No data</td></tr>"; return; }
   const cols = Object.keys(rows[0]);
   const thead=el("thead"); const trh=el("tr"); cols.forEach(c=>trh.appendChild(el("th",{text:c}))); thead.appendChild(trh);
   const tbody=el("tbody");
-  rows.forEach((r,idx)=>{ const tr=el("tr"); tr.addEventListener("click",()=>{ [...tbody.children].forEach(n=>n.classList.remove("selected")); tr.classList.add("selected"); opts.onSelect && opts.onSelect({row:r,idx});}); cols.forEach(c=>{ const td=el("td",{text:r[c]===undefined?"":String(r[c])}); td.contentEditable=true; td.addEventListener("input",()=>{ r[c]=td.innerText;}); tr.appendChild(td);}); tbody.appendChild(tr); });
+  rows.forEach((r,idx)=>{ const tr=el("tr"); cols.forEach(c=>{ const td=el("td",{text:r[c]===undefined?"":String(r[c])}); td.contentEditable=true; td.addEventListener("input",()=>{ r[c]=td.innerText;}); tr.appendChild(td);}); tbody.appendChild(tr); });
   table.appendChild(thead); table.appendChild(tbody);
 }
 
@@ -159,9 +200,9 @@ function computeKPIs(){
   const orders = db[tables.orders]||[];
   const statusField = orders.length ? (Object.keys(orders[0]).find(k=>/status|статус/i.test(k))||null) : null;
   const total=orders.length;
-  const active=statusField?orders.filter(r=>String(r[statusField]||"").match(/^(new|in.?prod|on.?hold|в работе|нов|на удерж)/i)).length:total;
-  const closed=statusField?orders.filter(r=>String(r[statusField]||"").match(/(installed|closed?|cancel(l)?ed|установ|закрыт|отмен)/i)).length:0;
-  const priceField = orders.length ? (Object.keys(orders[0]).find(k=>/(total|amount|price|сумма|итог)/i.test(k))||null) : null;
+  const active=statusField?orders.filter(r=>String(r[statusField]||"").match(/^(new|in.?prod|on.?hold)/i)).length:total;
+  const closed=statusField?orders.filter(r=>String(r[statusField]||"").match(/(installed|closed?|cancel(l)?ed)/i)).length:0;
+  const priceField = orders.length ? (Object.keys(orders[0]).find(k=>/(total|amount|price)/i.test(k))||null) : null;
   const totalSum = priceField ? orders.reduce((s,r)=>s+toNumber(r[priceField]),0) : 0;
   return [
     {label:"Total orders", value: total},
@@ -178,77 +219,156 @@ function populateStatusFilter(){
   unique(orders.map(r=>r[statusField]).filter(Boolean)).sort((a,b)=>String(a).localeCompare(String(b))).forEach(v=> sel.appendChild(el("option",{value:String(v),text:String(v)})) );
 }
 
-let ordersSelection={idx:-1,row:null}; let posSelection={idx:-1,row:null};
 function refreshOrders(){ const q=$("#ordersSearch").value.toLowerCase().trim(); const statusSel=$("#ordersStatus"); const statusField=statusSel.dataset.field||""; const only=statusSel.value;
   let rows=(db[tables.orders]||[]).slice(); if(q) rows=rows.filter(r=>Object.values(r).some(v=>String(v).toLowerCase().includes(q))); if(only&&statusField) rows=rows.filter(r=>String(r[statusField])===only);
-  renderTable("#ordersTable", rows, { onSelect:({row,idx})=> ordersSelection={row,idx} });
+  renderTable("#ordersTable", rows);
 }
 function refreshInvoices(){ const q=$("#invoicesSearch").value.toLowerCase().trim(); let rows=(db[tables.invoices]||[]).slice(); if(q) rows=rows.filter(r=>Object.values(r).some(v=>String(v).toLowerCase().includes(q))); renderTable("#invoicesTable", rows); }
-function refreshPOs(){ const q=$("#posSearch").value.toLowerCase().trim(); let rows=(db[tables.pos]||[]).slice(); if(q) rows=rows.filter(r=>Object.values(r).some(v=>String(v).toLowerCase().includes(q))); renderTable("#posTable", rows, { onSelect:({row,idx})=> posSelection={row,idx} }); }
+function refreshPOs(){ const q=$("#posSearch").value.toLowerCase().trim(); let rows=(db[tables.pos]||[]).slice(); if(q) rows=rows.filter(r=>Object.values(r).some(v=>String(v).toLowerCase().includes(q))); renderTable("#posTable", rows); }
 
-function detectField(obj, patterns){ const keys=Object.keys(obj||{}); for(const p of patterns){ const re=new RegExp(p,"i"); const k=keys.find(k=>re.test(k)); if(k) return k; } return null; }
-function setData(obj){ localStorage.setItem(KEY, JSON.stringify(obj)); }
-function getData(){ const raw=localStorage.getItem(KEY); return raw?JSON.parse(raw):null; }
-function saveAll(){ setData(db); alert("Saved ✅"); }
+// ---- Guided workflow ----
+function openModal(id){ $(id).style.display="flex"; }
+function closeModal(id){ $(id).style.display="none"; }
 
-function createInvoiceFromOrderId(orderId){
-  const orders=db[tables.orders]||[]; if(!orders.length) return alert("Нет заказов");
-  const orderIdField=detectField(orders[0],["^order.?id$","заказ.?id","^id$"]); if(!orderIdField) return alert("Не найдено поле Order ID");
-  const found=orders.find(r=>String(r[orderIdField]).trim()===String(orderId).trim()); if(!found) return alert("Заказ не найден");
-  const invoices=db[tables.invoices]=db[tables.invoices]||[];
-  const amountFieldOrder=detectField(found,["total","amount","price","итог","сумма"]); const amount=amountFieldOrder?String(found[amountFieldOrder]):"";
-  const today=new Date(); const rnd=Math.floor(1000+Math.random()*9000); const invId=`INV-${today.getFullYear()}${String(today.getMonth()+1).padStart(2,"0")}${String(today.getDate()).padStart(2,"0")}-${rnd}`;
-  const issue=fmtDate(today); const due=fmtDate(new Date(today.getTime()+21*24*3600*1000));
-  const invRow=invoices[0]?Object.fromEntries(Object.keys(invoices[0]).map(k=>[k,""])):{InvoiceID:"",OrderID:"",IssueDate:"",DueDate:"",Amount:""};
-  const invIdField=detectField(invRow,["invoice.?id","^id$"])||"InvoiceID";
-  const orderIdFieldInv=detectField(invRow,["order.?id","заказ.?id"])||"OrderID";
-  const issueField=detectField(invRow,["issue.?date","date","invoice.?date","дата"])||"IssueDate";
-  const dueField=detectField(invRow,["due.?date","срок"])||"DueDate";
-  const amountFieldInv=detectField(invRow,["amount|total|price|сумма|итог"])||"Amount";
-  invRow[invIdField]=invId; invRow[orderIdFieldInv]=found[orderIdField]; invRow[issueField]=issue; invRow[dueField]=due; invRow[amountFieldInv]=amount;
-  invoices.unshift(invRow); setData(db); refreshInvoices(); alert(`Invoice created: ${invId}`);
+function genId(prefix){ const now=new Date(); const rnd=Math.floor(100+Math.random()*900); return `${prefix}-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}-${rnd}`; }
+
+let lastClient = null;
+
+function newClientFlow(){
+  $("#clId").value = genId("C");
+  $("#clName").value = ""; $("#clPhone").value=""; $("#clEmail").value=""; $("#clAddr").value="";
+  openModal("#modalClientBack");
 }
 
-function deleteHardware(mode, orderId){
-  const posName=tables.pos; if(!posName) return alert("PO sheet not found"); const pos=db[posName]=db[posName]||[];
-  if(mode==="1"){ if(posSelection.idx<0) return alert("Select a row in PO"); pos.splice(posSelection.idx,1); setData(db); refreshPOs(); alert("Deleted ✅"); return; }
-  if(mode==="2"){ if(!orderId) return alert("Enter Order ID"); const sample=pos[0]||{};
-    const orderIdField=detectField(sample,["order.?id","заказ.?id","^id$"])||"OrderID"; const catField=detectField(sample,["category","type","катег","тип"])||"";
-    const before=pos.length; const filtered=pos.filter(r=>{ const ok=String(r[orderIdField]).trim()===String(orderId).trim(); const isHardware=catField? /hardware/i.test(String(r[catField])) : true; return !(ok&&isHardware); });
-    db[posName]=filtered; setData(db); refreshPOs(); alert(`Deleted: ${before-filtered.length}`); return; }
+function saveClient(){
+  const clientsName = tables.clients || "Clients";
+  const clients = db[clientsName] = db[clientsName] || [];
+  const sample = clients[0] || {};
+  const idF = detectField(sample, ["^client.?id$","^id$"]) || "ClientID";
+  const nameF = detectField(sample, ["name|full.?name|fio"]) || "Name";
+  const phoneF = detectField(sample, ["phone|тел"]) || "Phone";
+  const emailF = detectField(sample, ["email|почта"]) || "Email";
+  const addrF = detectField(sample, ["address|addr|адрес"]) || "Address";
+
+  const row = sample && Object.keys(sample).length ? Object.fromEntries(Object.keys(sample).map(k=>[k,""])) :
+    {[idF]:"",[nameF]:"",[phoneF]:"",[emailF]:"",[addrF]:""};
+
+  row[idF] = $("#clId").value.trim() || genId("C");
+  row[nameF] = $("#clName").value.trim();
+  row[phoneF] = $("#clPhone").value.trim();
+  row[emailF] = $("#clEmail").value.trim();
+  row[addrF] = $("#clAddr").value.trim();
+
+  clients.unshift(row);
+  setData(db);
+  lastClient = { idF, id: row[idF] };
+  closeModal("#modalClientBack");
+  // Go to order modal
+  newOrderFlow();
 }
 
-// Navigation
+function newOrderFlow(){
+  const orders = db[tables.orders] = db[tables.orders] || [];
+  const sample = orders[0] || {};
+  const orderIdF = detectField(sample, ["^order.?id$","^id$"]) || "OrderID";
+  const clientIdF = detectField(sample, ["client.?id","customer.?id","клиент.?id"]) || "ClientID";
+  $("#orId").value = genId("O");
+  $("#orClientId").value = lastClient ? lastClient.id : "";
+  $("#orStatus").value = "New";
+  $("#orTotal").value = "";
+  openModal("#modalOrderBack");
+  // Keep field names for save
+  $("#orSave").dataset.orderField = orderIdF;
+  $("#orSave").dataset.clientField = clientIdF;
+}
+
+function saveOrder(btn){
+  const orders = db[tables.orders] = db[tables.orders] || [];
+  const orderIdF = btn.dataset.orderField || "OrderID";
+  const clientIdF = btn.dataset.clientField || "ClientID";
+  const statusF = detectField(orders[0]||{}, ["status|статус"]) || "Status";
+  const totalF = detectField(orders[0]||{}, ["total|amount|price|сумма|итог"]) || "Total";
+
+  const row = orders[0] ? Object.fromEntries(Object.keys(orders[0]).map(k=>[k,""])) :
+    {[orderIdF]:"",[clientIdF]:"",[statusF]:"",[totalF]:""};
+
+  row[orderIdF] = $("#orId").value.trim() || genId("O");
+  row[clientIdF] = $("#orClientId").value.trim();
+  row[statusF] = $("#orStatus").value;
+  row[totalF] = $("#orTotal").value;
+
+  orders.unshift(row);
+  setData(db);
+  closeModal("#modalOrderBack");
+  // Go to Orders tab and refresh
+  show("orders"); renderKPIs(); populateStatusFilter(); refreshOrders();
+  alert("Client and Order saved ✅");
+}
+
+// ---- Navigation ----
 function show(view){ document.querySelectorAll(".view").forEach(v=>v.hidden=true); document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active")); document.getElementById(view).hidden=false; document.querySelector(`.tab[data-view="${view}"]`).classList.add("active"); }
 
 function boot(){ renderKPIs(); populateStatusFilter(); refreshOrders(); refreshInvoices(); refreshPOs(); }
 
-// Events
+// ---- Events ----
 document.addEventListener("click", (e)=>{ const t=e.target.closest(".tab"); if(t){ show(t.dataset.view); } });
 addEventListener("load", async ()=>{
   try{
     db = getData();
     if(!db){
-      const resp = await fetch("initial_data.json", {cache:"reload"});
+      const resp = await fetch("initial_data.json",{cache:"reload"});
       db = await resp.json();
       setData(db);
     }
+    detectTables();
     boot();
   }catch(err){ alert("Data load error: "+err.message); console.error(err); }
 });
+
 document.addEventListener("DOMContentLoaded", ()=>{
   $("#ordersSearch").addEventListener("input", refreshOrders);
   $("#ordersStatus").addEventListener("change", refreshOrders);
-  $("#addOrderBtn").addEventListener("click", ()=>{ const orders=db[tables.orders]=db[tables.orders]||[]; const tpl=orders[0]?Object.fromEntries(Object.keys(orders[0]).map(k=>[k,""])):{OrderID:"",Customer:"",Status:"New",Total:""}; orders.unshift(tpl); setData(db); refreshOrders(); });
-  $("#assignManagerBtn").addEventListener("click", ()=> alert("Назначение менеджера доступно в v1.0, при необходимости перенесу сюда"));
-  $("#saveOrders").addEventListener("click", ()=> saveAll());
+  $("#saveOrders").addEventListener("click", ()=> { setData(db); alert("Saved ✅"); });
+
   $("#invoicesSearch").addEventListener("input", refreshInvoices);
-  $("#saveInvoices").addEventListener("click", ()=> saveAll());
+  $("#saveInvoices").addEventListener("click", ()=> { setData(db); alert("Saved ✅"); });
+
   $("#posSearch").addEventListener("input", refreshPOs);
-  $("#savePOs").addEventListener("click", ()=> saveAll());
+  $("#savePOs").addEventListener("click", ()=> { setData(db); alert("Saved ✅"); });
+
   $("#exportBtn").addEventListener("click", ()=>{ const blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="furniture_erp_data.json"; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); });
   $("#importFile").addEventListener("change", e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ db=JSON.parse(r.result); setData(db); boot(); alert("Imported ✅"); }catch(err){ alert("Import error: "+err.message);} }; r.readAsText(f,"utf-8"); });
   $("#resetBtn").addEventListener("click", ()=>{ localStorage.removeItem(KEY); location.reload(); });
+
+  // Guided
+  $("#fabStart").addEventListener("click", newClientFlow);
+  $("#btnNewClient").addEventListener("click", newClientFlow);
+  $("#btnNewOrder").addEventListener("click", ()=> { if(!lastClient) newClientFlow(); else newOrderFlow(); });
+
+  // Modal actions
+  $("#clCancel").addEventListener("click", ()=> closeModal("#modalClientBack"));
+  $("#clSave").addEventListener("click", saveClient);
+
+  $("#orCancel").addEventListener("click", ()=> closeModal("#modalOrderBack"));
+  $("#orSave").addEventListener("click", (e)=> saveOrder(e.target));
+
+  // Tools
+  $("#ciCreate").addEventListener("click", ()=>{
+    const id = $("#ciOrderId").value.trim(); if(!id) return alert("Enter Order ID");
+    // Create invoice like in v1.2
+    const orders = db[tables.orders]||[]; if(!orders.length) return alert("No orders");
+    const orderIdField = detectField(orders[0], ["^order.?id$","заказ.?id","^id$"]); if(!orderIdField) return alert("Order ID field not found");
+    const found=orders.find(r=>String(r[orderIdField]).trim()===String(id).trim()); if(!found) return alert("Order not found");
+    const invoices=db[tables.invoices]=db[tables.invoices]||[];
+    const amountFieldOrder=detectField(found,["total","amount","price","итог","сумма"]); const amount=amountFieldOrder?String(found[amountFieldOrder]):"";
+    const today=new Date(); const rnd=Math.floor(1000+Math.random()*9000); const invId=`INV-${today.getFullYear()}${String(today.getMonth()+1).padStart(2,"0")}${String(today.getDate()).padStart(2,"0")}-${rnd}`;
+    const issue=fmtDate(today); const due=fmtDate(new Date(today.getTime()+21*24*3600*1000));
+    const invRow=invoices[0]?Object.fromEntries(Object.keys(invoices[0]).map(k=>[k,""])):{InvoiceID:"",OrderID:"",IssueDate:"",DueDate:"",Amount:""};
+    const invIdField=detectField(invRow,["invoice.?id","^id$"])||"InvoiceID"; const orderIdFieldInv=detectField(invRow,["order.?id","заказ.?id"])||"OrderID";
+    const issueField=detectField(invRow,["issue.?date","date","invoice.?date","дата"])||"IssueDate"; const dueField=detectField(invRow,["due.?date","срок"])||"DueDate"; const amountFieldInv=detectField(invRow,["amount|total|price|сумма|итог"])||"Amount";
+    invRow[invIdField]=invId; invRow[orderIdFieldInv]=found[orderIdField]; invRow[issueField]=issue; invRow[dueField]=due; invRow[amountFieldInv]=amount;
+    invoices.unshift(invRow); setData(db); refreshInvoices(); alert(`Invoice created: ${invId}`);
+  });
 });
 
 // SW
