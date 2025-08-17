@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Furniture ERP — PWA v1.2</title>
+  <meta name="theme-color" content="#111111">
+  <link rel="manifest" href="manifest.json">
+  <style>
+    :root { --bg:#0f0f10; --fg:#f2f2f3; --muted:#b9bcc2; --card:#1a1b1e; --acc:#4da3ff; --good:#16a34a; --bad:#ef4444; --warn:#f59e0b; }
+    @media (prefers-color-scheme: light) {
+      :root { --bg:#f7f7f8; --fg:#0f1115; --muted:#475569; --card:#ffffff; --acc:#2563eb; }
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--fg); font: 15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, 'Helvetica Neue', Arial; }
+    header { position:sticky; top:0; z-index:10; backdrop-filter:saturate(1.2) blur(8px); background:#111a; border-bottom:1px solid #0004; }
+    .bar { display:flex; gap:.6rem; align-items:center; padding:.7rem .9rem; }
+    .title { font-weight:800; letter-spacing:.2px; }
+    .tabs { display:flex; gap:.4rem; flex-wrap:wrap; margin-left:auto; }
+    .tab { border:1px solid #0004; padding:.45rem .7rem; border-radius:9px; cursor:pointer; background:var(--card); color:var(--fg); user-select:none; }
+    .tab.active { outline:2px solid var(--acc); }
+    main { max-width:1200px; margin: 1rem auto; padding: 0 .9rem 2rem; }
+    .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:.9rem; margin:1rem 0; }
+    .kpi { background:var(--card); border:1px solid #0004; border-radius:12px; padding:1rem; }
+    .muted { color:var(--muted); }
+    .toolbar { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin:.7rem 0 1rem; }
+    input, select, button { padding:.5rem .6rem; border-radius:8px; border:1px solid #0004; background:var(--card); color:var(--fg); }
+    button.primary { background: var(--acc); color: white; border: none; }
+    button.danger { background: var(--bad); color: white; border: none; }
+    .grid { overflow:auto; border:1px solid #0004; border-radius:10px; background:var(--card); }
+    table { width:100%; border-collapse:collapse; min-width:820px; }
+    th, td { padding:.6rem .7rem; border-bottom:1px solid #0002; text-align:left; white-space:nowrap; }
+    th { position:sticky; top:0; background:#1f2226; }
+    tr.selected { outline: 2px solid var(--acc); }
+    .section { margin: 1rem 0 1.4rem; }
+    .help { font-size:12px; color:var(--muted); }
+  </style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="title">🪵 Furniture ERP</div>
+    <div class="tabs">
+      <div class="tab active" data-view="dashboard">Dashboard</div>
+      <div class="tab" data-view="orders">Orders</div>
+      <div class="tab" data-view="invoices">Invoices</div>
+      <div class="tab" data-view="pos">Purchases (PO)</div>
+      <div class="tab" data-view="tools">Tools</div>
+      <div class="tab" data-view="import">Import/Export</div>
+      <div class="tab" data-view="about">About</div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section id="dashboard" class="view">
+    <h2>Dashboard</h2>
+    <div class="kpis" id="kpiBox"></div>
+    <div class="muted">Data loaded from <code>initial_data.json</code> and saved to LocalStorage.</div>
+  </section>
+
+  <section id="orders" class="view" hidden>
+    <h2>Orders</h2>
+    <div class="toolbar">
+      <input id="ordersSearch" placeholder="Search">
+      <select id="ordersStatus"></select>
+      <button id="addOrderBtn" class="primary">+ New order</button>
+      <button id="assignManagerBtn">Assign manager</button>
+      <button id="saveOrders">Save</button>
+    </div>
+    <div class="grid"><table id="ordersTable"></table></div>
+  </section>
+
+  <section id="invoices" class="view" hidden>
+    <h2>Invoices</h2>
+    <div class="toolbar">
+      <input id="invoicesSearch" placeholder="Search">
+      <button id="saveInvoices">Save</button>
+    </div>
+    <div class="grid"><table id="invoicesTable"></table></div>
+  </section>
+
+  <section id="pos" class="view" hidden>
+    <h2>Purchases (PO)</h2>
+    <div class="toolbar">
+      <input id="posSearch" placeholder="Search">
+      <button id="savePOs">Save</button>
+    </div>
+    <div class="grid"><table id="posTable"></table></div>
+  </section>
+
+  <section id="tools" class="view" hidden>
+    <h2>Tools</h2>
+    <div class="section">
+      <h3>Create invoice by Order ID</h3>
+      <div class="toolbar">
+        <input id="ciOrderId" placeholder="Order ID">
+        <button id="ciCreate" class="primary">Create invoice</button>
+      </div>
+    </div>
+    <div class="section">
+      <h3>Delete Hardware in PO</h3>
+      <div class="toolbar">
+        <input id="delOrderId" placeholder="Order ID (for mode 2)">
+        <select id="delMode">
+          <option value="1">1 — Delete selected row</option>
+          <option value="2">2 — Delete all Hardware by Order ID</option>
+        </select>
+        <button id="delGo" class="danger">Delete</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="import" class="view" hidden>
+    <h2>Import / Export</h2>
+    <div style="display:grid; gap:.8rem; max-width:700px;">
+      <button id="exportBtn">⬇ Экспорт JSON</button>
+      <input type="file" id="importFile" accept="application/json">
+      <button id="resetBtn">↺ Reset to initial</button>
+    </div>
+  </section>
+
+  <section id="about" class="view" hidden>
+    <h2>About</h2>
+    <p>Version v1.1 (safe data loading via fetch). If buttons don't work — open DevTools → Console and share the error screenshot.</p>
+  </section>
+</main>
+
+<script>
+const KEY = "furniture_erp_data_v11";
+let db = null;
+const tables = {};
+function $(sel){ return document.querySelector(sel); }
+function el(tag, attrs={}, children=[]){ const n=document.createElement(tag); for(const[k,v]of Object.entries(attrs)){ if(k==="text")n.textContent=v; else if(k==="html")n.innerHTML=v; else n.setAttribute(k,v);} for(const c of children) n.appendChild(c); return n; }
+function unique(a){ return [...new Set(a)]; }
+function toNumber(x){ const n=parseFloat(String(x||"").replace(/[^0-9.\-]/g,"")); return isNaN(n)?0:n; }
+function fmtDate(d){ const z=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`; }
+
+function detectTables(){
+  const names = Object.keys(db).map(n=>n.toLowerCase());
+  const find = (cands, fb="") => { for(const c of cands){ const i=names.indexOf(c); if(i>=0) return Object.keys(db)[i]; } return Object.keys(db)[0]||fb; };
+  tables.orders = find(["orders","заказы","order","active orders","orders list"]);
+  tables.invoices = find(["invoices","invoice","инвойсы","инвойс"]);
+  tables.pos = find(["hardwarepo","hardware po","po","purchase orders","закупки"]);
+  tables.managers = find(["managers","менеджеры","сотрудники"], "");
+}
+
+function renderTable(sel, rows, opts={}){
+  const table = $(sel); table.innerHTML="";
+  if(!rows||!rows.length){ table.innerHTML="<tr><td class='muted'>No data</td></tr>"; return; }
+  const cols = Object.keys(rows[0]);
+  const thead=el("thead"); const trh=el("tr"); cols.forEach(c=>trh.appendChild(el("th",{text:c}))); thead.appendChild(trh);
+  const tbody=el("tbody");
+  rows.forEach((r,idx)=>{ const tr=el("tr"); tr.addEventListener("click",()=>{ [...tbody.children].forEach(n=>n.classList.remove("selected")); tr.classList.add("selected"); opts.onSelect && opts.onSelect({row:r,idx});}); cols.forEach(c=>{ const td=el("td",{text:r[c]===undefined?"":String(r[c])}); td.contentEditable=true; td.addEventListener("input",()=>{ r[c]=td.innerText;}); tr.appendChild(td);}); tbody.appendChild(tr); });
+  table.appendChild(thead); table.appendChild(tbody);
+}
+
+function computeKPIs(){
+  const orders = db[tables.orders]||[];
+  const statusField = orders.length ? (Object.keys(orders[0]).find(k=>/status|статус/i.test(k))||null) : null;
+  const total=orders.length;
+  const active=statusField?orders.filter(r=>String(r[statusField]||"").match(/^(new|in.?prod|on.?hold|в работе|нов|на удерж)/i)).length:total;
+  const closed=statusField?orders.filter(r=>String(r[statusField]||"").match(/(installed|closed?|cancel(l)?ed|установ|закрыт|отмен)/i)).length:0;
+  const priceField = orders.length ? (Object.keys(orders[0]).find(k=>/(total|amount|price|сумма|итог)/i.test(k))||null) : null;
+  const totalSum = priceField ? orders.reduce((s,r)=>s+toNumber(r[priceField]),0) : 0;
+  return [
+    {label:"Total orders", value: total},
+    {label:"Active", value: active},
+    {label:"Closed/Installed", value: closed},
+    {label: priceField?`Sum by «${priceField}»`:"Sum", value: priceField? totalSum.toLocaleString('en-US',{style:'currency',currency:'USD'}) : "—"}
+  ];
+}
+function renderKPIs(){ const box=$("#kpiBox"); box.innerHTML=""; computeKPIs().forEach(k=>{ box.appendChild(el("div",{class:"kpi"},[ el("div",{class:"muted",text:k.label}), el("div",{style:"font-size:26px;font-weight:800;margin-top:.2rem;",text:String(k.value)}) ])); }); }
+
+function populateStatusFilter(){
+  const orders=db[tables.orders]||[]; const sel=$("#ordersStatus"); sel.innerHTML=""; sel.appendChild(el("option",{value:"",text:"Status: any"}));
+  if(!orders.length) return; const statusField=Object.keys(orders[0]).find(k=>/status|статус/i.test(k)); if(!statusField) return; sel.dataset.field=statusField;
+  unique(orders.map(r=>r[statusField]).filter(Boolean)).sort((a,b)=>String(a).localeCompare(String(b))).forEach(v=> sel.appendChild(el("option",{value:String(v),text:String(v)})) );
+}
+
+let ordersSelection={idx:-1,row:null}; let posSelection={idx:-1,row:null};
+function refreshOrders(){ const q=$("#ordersSearch").value.toLowerCase().trim(); const statusSel=$("#ordersStatus"); const statusField=statusSel.dataset.field||""; const only=statusSel.value;
+  let rows=(db[tables.orders]||[]).slice(); if(q) rows=rows.filter(r=>Object.values(r).some(v=>String(v).toLowerCase().includes(q))); if(only&&statusField) rows=rows.filter(r=>String(r[statusField])===only);
+  renderTable("#ordersTable", rows, { onSelect:({row,idx})=> ordersSelection={row,idx} });
+}
+function refreshInvoices(){ const q=$("#invoicesSearch").value.toLowerCase().trim(); let rows=(db[tables.invoices]||[]).slice(); if(q) rows=rows.filter(r=>Object.values(r).some(v=>String(v).toLowerCase().includes(q))); renderTable("#invoicesTable", rows); }
+function refreshPOs(){ const q=$("#posSearch").value.toLowerCase().trim(); let rows=(db[tables.pos]||[]).slice(); if(q) rows=rows.filter(r=>Object.values(r).some(v=>String(v).toLowerCase().includes(q))); renderTable("#posTable", rows, { onSelect:({row,idx})=> posSelection={row,idx} }); }
+
+function detectField(obj, patterns){ const keys=Object.keys(obj||{}); for(const p of patterns){ const re=new RegExp(p,"i"); const k=keys.find(k=>re.test(k)); if(k) return k; } return null; }
+function setData(obj){ localStorage.setItem(KEY, JSON.stringify(obj)); }
+function getData(){ const raw=localStorage.getItem(KEY); return raw?JSON.parse(raw):null; }
+function saveAll(){ setData(db); alert("Saved ✅"); }
+
+function createInvoiceFromOrderId(orderId){
+  const orders=db[tables.orders]||[]; if(!orders.length) return alert("Нет заказов");
+  const orderIdField=detectField(orders[0],["^order.?id$","заказ.?id","^id$"]); if(!orderIdField) return alert("Не найдено поле Order ID");
+  const found=orders.find(r=>String(r[orderIdField]).trim()===String(orderId).trim()); if(!found) return alert("Заказ не найден");
+  const invoices=db[tables.invoices]=db[tables.invoices]||[];
+  const amountFieldOrder=detectField(found,["total","amount","price","итог","сумма"]); const amount=amountFieldOrder?String(found[amountFieldOrder]):"";
+  const today=new Date(); const rnd=Math.floor(1000+Math.random()*9000); const invId=`INV-${today.getFullYear()}${String(today.getMonth()+1).padStart(2,"0")}${String(today.getDate()).padStart(2,"0")}-${rnd}`;
+  const issue=fmtDate(today); const due=fmtDate(new Date(today.getTime()+21*24*3600*1000));
+  const invRow=invoices[0]?Object.fromEntries(Object.keys(invoices[0]).map(k=>[k,""])):{InvoiceID:"",OrderID:"",IssueDate:"",DueDate:"",Amount:""};
+  const invIdField=detectField(invRow,["invoice.?id","^id$"])||"InvoiceID";
+  const orderIdFieldInv=detectField(invRow,["order.?id","заказ.?id"])||"OrderID";
+  const issueField=detectField(invRow,["issue.?date","date","invoice.?date","дата"])||"IssueDate";
+  const dueField=detectField(invRow,["due.?date","срок"])||"DueDate";
+  const amountFieldInv=detectField(invRow,["amount|total|price|сумма|итог"])||"Amount";
+  invRow[invIdField]=invId; invRow[orderIdFieldInv]=found[orderIdField]; invRow[issueField]=issue; invRow[dueField]=due; invRow[amountFieldInv]=amount;
+  invoices.unshift(invRow); setData(db); refreshInvoices(); alert(`Invoice created: ${invId}`);
+}
+
+function deleteHardware(mode, orderId){
+  const posName=tables.pos; if(!posName) return alert("PO sheet not found"); const pos=db[posName]=db[posName]||[];
+  if(mode==="1"){ if(posSelection.idx<0) return alert("Select a row in PO"); pos.splice(posSelection.idx,1); setData(db); refreshPOs(); alert("Deleted ✅"); return; }
+  if(mode==="2"){ if(!orderId) return alert("Enter Order ID"); const sample=pos[0]||{};
+    const orderIdField=detectField(sample,["order.?id","заказ.?id","^id$"])||"OrderID"; const catField=detectField(sample,["category","type","катег","тип"])||"";
+    const before=pos.length; const filtered=pos.filter(r=>{ const ok=String(r[orderIdField]).trim()===String(orderId).trim(); const isHardware=catField? /hardware/i.test(String(r[catField])) : true; return !(ok&&isHardware); });
+    db[posName]=filtered; setData(db); refreshPOs(); alert(`Deleted: ${before-filtered.length}`); return; }
+}
+
+// Navigation
+function show(view){ document.querySelectorAll(".view").forEach(v=>v.hidden=true); document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active")); document.getElementById(view).hidden=false; document.querySelector(`.tab[data-view="${view}"]`).classList.add("active"); }
+
+function boot(){ renderKPIs(); populateStatusFilter(); refreshOrders(); refreshInvoices(); refreshPOs(); }
+
+// Events
+document.addEventListener("click", (e)=>{ const t=e.target.closest(".tab"); if(t){ show(t.dataset.view); } });
+addEventListener("load", async ()=>{
+  try{
+    db = getData();
+    if(!db){
+      const resp = await fetch("initial_data.json", {cache:"reload"});
+      db = await resp.json();
+      setData(db);
+    }
+    boot();
+  }catch(err){ alert("Data load error: "+err.message); console.error(err); }
+});
+document.addEventListener("DOMContentLoaded", ()=>{
+  $("#ordersSearch").addEventListener("input", refreshOrders);
+  $("#ordersStatus").addEventListener("change", refreshOrders);
+  $("#addOrderBtn").addEventListener("click", ()=>{ const orders=db[tables.orders]=db[tables.orders]||[]; const tpl=orders[0]?Object.fromEntries(Object.keys(orders[0]).map(k=>[k,""])):{OrderID:"",Customer:"",Status:"New",Total:""}; orders.unshift(tpl); setData(db); refreshOrders(); });
+  $("#assignManagerBtn").addEventListener("click", ()=> alert("Назначение менеджера доступно в v1.0, при необходимости перенесу сюда"));
+  $("#saveOrders").addEventListener("click", ()=> saveAll());
+  $("#invoicesSearch").addEventListener("input", refreshInvoices);
+  $("#saveInvoices").addEventListener("click", ()=> saveAll());
+  $("#posSearch").addEventListener("input", refreshPOs);
+  $("#savePOs").addEventListener("click", ()=> saveAll());
+  $("#exportBtn").addEventListener("click", ()=>{ const blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="furniture_erp_data.json"; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); });
+  $("#importFile").addEventListener("change", e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ db=JSON.parse(r.result); setData(db); boot(); alert("Imported ✅"); }catch(err){ alert("Import error: "+err.message);} }; r.readAsText(f,"utf-8"); });
+  $("#resetBtn").addEventListener("click", ()=>{ localStorage.removeItem(KEY); location.reload(); });
+});
+
+// SW
+if("serviceWorker" in navigator){ addEventListener("load", ()=> navigator.serviceWorker.register("service-worker.js").catch(console.error)); }
+</script>
+</body>
+</html>
