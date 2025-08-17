@@ -1,9 +1,9 @@
 {
   "name": "Furniture ERP",
-  "short_name": "Furniture ERP",
-  "start_url": "./?v=20250817203802",
+  "short_name": "ERP",
+  "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#111111",
-  "theme_color": "#111111",
-  "icons": []
+  "background_color": "#ffffff",
+  "description": "Furniture ERP v1.6 with Update button",
+  "version": "1.6"
 }
