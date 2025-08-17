@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Furniture ERP — PWA v1.4</title>
+  <meta name="theme-color" content="#111111">
+  <link rel="manifest" href="manifest.json?v=20250817202541">
+  <style>
+    :root { --bg:#0f0f10; --fg:#f2f2f3; --muted:#b9bcc2; --card:#1a1b1e; --acc:#4da3ff; --good:#16a34a; --bad:#ef4444; --warn:#f59e0b; }
+    @media (prefers-color-scheme: light) { :root { --bg:#f7f7f8; --fg:#0f1115; --muted:#475569; --card:#ffffff; --acc:#2563eb; } }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--fg); font: 15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, 'Helvetica Neue', Arial; }
+    header { position:sticky; top:0; z-index:10; backdrop-filter:saturate(1.2) blur(8px); background:#111a; border-bottom:1px solid #0004; }
+    .bar { display:flex; gap:.6rem; align-items:center; padding:.7rem .9rem; }
+    .title { font-weight:800; letter-spacing:.2px; }
+    .tabs { display:flex; gap:.4rem; flex-wrap:wrap; margin-left:auto; }
+    .tab { border:1px solid #0004; padding:.45rem .7rem; border-radius:9px; cursor:pointer; background:var(--card); color:var(--fg); user-select:none; }
+    .tab.active { outline:2px solid var(--acc); }
+    main { max-width:1200px; margin: 1rem auto; padding: 0 .9rem 4rem; }
+    .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:.9rem; margin:1rem 0; }
+    .kpi { background:var(--card); border:1px solid #0004; border-radius:12px; padding:1rem; }
+    .muted { color:var(--muted); }
+    .toolbar { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin:.7rem 0 1rem; }
+    input, select, button { padding:.5rem .6rem; border-radius:8px; border:1px solid #0004; background:var(--card); color:var(--fg); }
+    button.primary { background: var(--acc); color: white; border: none; }
+    .grid { overflow:auto; border:1px solid #0004; border-radius:10px; background:var(--card); }
+    table { width:100%; border-collapse:collapse; min-width:820px; }
+    th, td { padding:.6rem .7rem; border-bottom:1px solid #0002; text-align:left; white-space:nowrap; }
+    th { position:sticky; top:0; background:#1f2226; }
+    .charts { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:1rem; }
+    canvas { background:var(--card); border:1px solid #0004; border-radius:12px; padding:.5rem; }
+    .fab { position:fixed; right:18px; bottom:18px; background:var(--acc); color:#fff; border:none; border-radius:999px; padding:14px 18px; font-weight:700; cursor:pointer; box-shadow:0 10px 30px #0006; }
+  </style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="title">🪵 Furniture ERP</div>
+    <div class="tabs">
+      <div class="tab active" data-view="dashboard">Dashboard</div>
+      <div class="tab" data-view="clients">Clients</div>
+      <div class="tab" data-view="orders">Orders</div>
+      <div class="tab" data-view="invoices">Invoices</div>
+      <div class="tab" data-view="pos">Purchases (PO)</div>
+      <div class="tab" data-view="tools">Tools</div>
+      <div class="tab" data-view="import">Import/Export</div>
+      <div class="tab" data-view="about">About</div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section id="dashboard" class="view">
+    <h2>Dashboard</h2>
+    <div class="kpis" id="kpiBox"></div>
+    <div class="charts">
+      <canvas id="chartStatus" height="260"></canvas>
+      <canvas id="chartMonthly" height="260"></canvas>
+    </div>
+    <div class="muted" style="margin-top:.6rem;">Data loaded from <code>initial_data.json</code> and saved to LocalStorage.</div>
+  </section>
+
+  <section id="clients" class="view" hidden>
+    <h2>Clients</h2>
+    <div class="toolbar">
+      <input id="clSearch" placeholder="Search">
+      <button id="clAdd" class="primary">+ New client</button>
+      <button id="clSave">Save</button>
+    </div>
+    <div class="grid"><table id="clTable"></table></div>
+  </section>
+
+  <section id="orders" class="view" hidden>
+    <h2>Orders</h2>
+    <div class="toolbar">
+      <input id="ordersSearch" placeholder="Search">
+      <select id="ordersStatus"></select>
+      <button id="btnNewOrder" class="primary">+ New order (guided)</button>
+      <button id="saveOrders">Save</button>
+    </div>
+    <div class="grid"><table id="ordersTable"></table></div>
+  </section>
+
+  <section id="invoices" class="view" hidden>
+    <h2>Invoices</h2>
+    <div class="toolbar">
+      <input id="invoicesSearch" placeholder="Search">
+      <button id="saveInvoices">Save</button>
+    </div>
+    <div class="grid"><table id="invoicesTable"></table></div>
+  </section>
+
+  <section id="pos" class="view" hidden>
+    <h2>Purchases (PO)</h2>
+    <div class="toolbar">
+      <input id="posSearch" placeholder="Search">
+      <button id="savePOs">Save</button>
+    </div>
+    <div class="grid"><table id="posTable"></table></div>
+  </section>
+
+  <section id="tools" class="view" hidden>
+    <h2>Tools</h2>
+    <div class="toolbar">
+      <input id="ciOrderId" placeholder="Order ID">
+      <button id="ciCreate" class="primary">Create invoice</button>
+      <span class="muted">IssueDate=today, DueDate=+21d, Amount from order Total/Amount.</span>
+    </div>
+  </section>
+
+  <section id="import" class="view" hidden>
+    <h2>Import / Export</h2>
+    <div style="display:grid; gap:.8rem; max-width:700px;">
+      <button id="exportBtn">⬇ Export JSON</button>
+      <input type="file" id="importFile" accept="application/json">
+      <button id="resetBtn">↺ Reset to initial</button>
+    </div>
+  </section>
+
+  <section id="about" class="view" hidden>
+    <h2>About</h2>
+    <p>Version v1.4 — Charts on Dashboard, Clients tab, more KPIs, cache-busting for fast updates.</p>
+  </section>
+</main>
+
+<button class="fab" id="fabStart">+ Start<br><small>Client → Order</small></button>
+
+<script>
+const VER = "20250817202541"; // cache-busting token
+const KEY = "furniture_erp_data_v14";
+let db = null;
+const tables = {};
+
+function $(sel){ return document.querySelector(sel); }
+function el(tag, attrs={}, children=[]){ const n=document.createElement(tag); for(const[k,v]of Object.entries(attrs)){ if(k==="text")n.textContent=v; else if(k==="html")n.innerHTML=v; else n.setAttribute(k,v);} for(const c of children) n.appendChild(c); return n; }
+function unique(a){ return [...new Set(a)]; }
+function toNumber(x){ const n=parseFloat(String(x||"").replace(/[^0-9.\-]/g,"")); return isNaN(n)?0:n; }
+function fmtDate(d){ const z=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`; }
+function setData(obj){ localStorage.setItem(KEY, JSON.stringify(obj)); }
+function getData(){ const raw=localStorage.getItem(KEY); return raw?JSON.parse(raw):null; }
+
+function detectTables(){
+  const names = Object.keys(db).map(n=>n.toLowerCase());
+  const find = (cands, fb="") => { for(const c of cands){ const i=names.indexOf(c); if(i>=0) return Object.keys(db)[i]; } return Object.keys(db)[0]||fb; };
+  tables.orders = find(["orders","order","заказы"]);
+  tables.invoices = find(["invoices","invoice","инвойсы"]);
+  tables.pos = find(["hardwarepo","hardware po","po","purchase orders","закупки"]);
+  tables.clients = find(["clients","customers","клиенты","client"]);
+}
+function detectField(obj, patterns){ const keys=Object.keys(obj||{}); for(const p of patterns){ const re=new RegExp(p,"i"); const k=keys.find(k=>re.test(k)); if(k) return k; } return null; }
+
+// ---------- TABLE RENDER ----------
+function renderTable(sel, rows){
+  const table = $(sel); table.innerHTML="";
+  if(!rows||!rows.length){ table.innerHTML="<tr><td class='muted'>No data</td></tr>"; return; }
+  const cols = Object.keys(rows[0]);
+  const thead=el("thead"); const trh=el("tr"); cols.forEach(c=>trh.appendChild(el("th",{text:c}))); thead.appendChild(trh);
+  const tbody=el("tbody");
+  rows.forEach((r,idx)=>{ const tr=el("tr"); cols.forEach(c=>{ const td=el("td",{text:r[c]===undefined?"":String(r[c])}); td.contentEditable=true; td.addEventListener("input",()=>{ r[c]=td.innerText; }); tr.appendChild(td);}); tbody.appendChild(tr); });
+  table.appendChild(thead); table.appendChild(tbody);
+}
+
+// ---------- KPIs ----------
+function computeKPIs(){
+  const orders = db[tables.orders]||[];
+  const invoices = db[tables.invoices]||[];
+  const pos = db[tables.pos]||[];
+  const clients = db[tables.clients]||[];
+
+  const sField = orders.length?(Object.keys(orders[0]).find(k=>/status|статус/i.test(k))||null):null;
+  const total = orders.length;
+  const active = sField?orders.filter(r=>String(r[sField]||"").match(/^(new|in.?prod|on.?hold)/i)).length:total;
+  const closed = sField?orders.filter(r=>String(r[sField]||"").match(/(installed|closed?|cancel(l)?ed)/i)).length:0;
+
+  const oAmtF = orders.length?(Object.keys(orders[0]).find(k=>/(total|amount|price|сумма|итог)/i.test(k))||null):null;
+  const iAmtF = invoices.length?(Object.keys(invoices[0]).find(k=>/(amount|total|price|сумма|итог)/i.test(k))||null):null;
+  const sumOrders = oAmtF?orders.reduce((s,r)=>s+toNumber(r[oAmtF]),0):0;
+  const sumInvoices = iAmtF?invoices.reduce((s,r)=>s+toNumber(r[iAmtF]),0):0;
+
+  return [
+    {label:"Total orders", value: total},
+    {label:"Active", value: active},
+    {label:"Closed/Installed", value: closed},
+    {label: oAmtF?`Sum by «${oAmtF}»`:"Sum Orders", value: oAmtF? sumOrders.toLocaleString('en-US',{style:'currency',currency:'USD'}) : "—"},
+    {label:"Sum Invoices", value: sumInvoices? sumInvoices.toLocaleString('en-US',{style:'currency',currency:'USD'}) : "$0.00"},
+    {label:"PO rows", value: pos.length},
+    {label:"Clients", value: clients.length},
+  ];
+}
+function renderKPIs(){
+  const box=$("#kpiBox"); box.innerHTML=""; computeKPIs().forEach(k=>{ box.appendChild(el("div",{class:"kpi"},[ el("div",{class:"muted",text:k.label}), el("div",{style:"font-size:26px;font-weight:800;margin-top:.2rem;",text:String(k.value)}) ])); }); 
+}
+
+// ---------- CHARTS (vanilla canvas) ----------
+function drawBar(canvas, labels, values){
+  const ctx=canvas.getContext("2d");
+  const W=canvas.width=canvas.clientWidth, H=canvas.height=canvas.clientHeight;
+  ctx.clearRect(0,0,W,H);
+  const max=Math.max(1, ...values);
+  const pad=40; const barW=(W-pad*2)/labels.length*0.7; const step=(W-pad*2)/labels.length;
+  ctx.fillStyle="#888"; ctx.font="12px system-ui"; ctx.strokeStyle="#444";
+  // axes
+  ctx.beginPath(); ctx.moveTo(pad, H-pad); ctx.lineTo(W-pad, H-pad); ctx.moveTo(pad, pad); ctx.lineTo(pad, H-pad); ctx.stroke();
+  values.forEach((v,i)=>{ const x=pad+i*step+step*0.15; const h=(H-pad*2)*v/max; const y=H-pad-h; ctx.fillStyle="#4da3ff"; ctx.fillRect(x,y,barW,h); ctx.fillStyle="#bbb"; ctx.save(); ctx.translate(x+barW/2, H-pad+14); ctx.rotate(-Math.PI/6); ctx.fillText(labels[i], -20, 0); ctx.restore(); ctx.fillText(String(v), x+barW/2-6, y-4); });
+}
+function drawLine(canvas, labels, values){
+  const ctx=canvas.getContext("2d");
+  const W=canvas.width=canvas.clientWidth, H=canvas.height=canvas.clientHeight;
+  ctx.clearRect(0,0,W,H);
+  const max=Math.max(1, ...values);
+  const pad=40; const step=(W-pad*2)/Math.max(1,labels.length-1);
+  ctx.strokeStyle="#444"; ctx.beginPath(); ctx.moveTo(pad, H-pad); ctx.lineTo(W-pad, H-pad); ctx.moveTo(pad, pad); ctx.lineTo(pad, H-pad); ctx.stroke();
+  ctx.strokeStyle="#4da3ff"; ctx.lineWidth=2; ctx.beginPath();
+  values.forEach((v,i)=>{ const x=pad+i*step; const y=H-pad-(H-pad*2)*v/max; if(i==0) ctx.moveTo(x,y); else ctx.lineTo(x,y); ctx.fillStyle="#4da3ff"; ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill(); });
+  ctx.fillStyle="#bbb"; ctx.font="12px system-ui";
+  labels.forEach((l,i)=>{ const x=pad+i*step; ctx.save(); ctx.translate(x, H-pad+14); ctx.rotate(-Math.PI/6); ctx.fillText(l, -20, 0); ctx.restore(); });
+}
+
+// ---------- Filters & tables ----------
+function populateStatusFilter(){
+  const orders=db[tables.orders]||[]; const sel=$("#ordersStatus"); sel.innerHTML=""; sel.appendChild(el("option",{value:"",text:"Status: any"}));
+  if(!orders.length) return; const statusField=Object.keys(orders[0]).find(k=>/status|статус/i.test(k)); if(!statusField) return; sel.dataset.field=statusField;
+  unique(orders.map(r=>r[statusField]).filter(Boolean)).sort((a,b)=>String(a).localeCompare(String(b))).forEach(v=> sel.appendChild(el("option",{value:String(v),text:String(v)})) );
+}
+function refreshOrders(){
+  const q=$("#ordersSearch").value.toLowerCase().trim(); const statusSel=$("#ordersStatus"); const statusField=statusSel.dataset.field||""; const only=statusSel.value;
+  let rows=(db[tables.orders]||[]).slice(); if(q) rows=rows.filter(r=>Object.values(r).some(v=>String(v).toLowerCase().includes(q))); if(only&&statusField) rows=rows.filter(r=>String(r[statusField])===only);
+  renderTable("#ordersTable", rows);
+}
+function refreshInvoices(){
+  const q=$("#invoicesSearch").value.toLowerCase().trim(); let rows=(db[tables.invoices]||[]).slice(); if(q) rows=rows.filter(r=>Object.values(r).some(v=>String(v).toLowerCase().includes(q))); renderTable("#invoicesTable", rows);
+}
+function refreshPOs(){
+  const q=$("#posSearch").value.toLowerCase().trim(); let rows=(db[tables.pos]||[]).slice(); if(q) rows=rows.filter(r=>Object.values(r).some(v=>String(v).toLowerCase().includes(q))); renderTable("#posTable", rows);
+}
+
+// ---------- Clients CRUD ----------
+function refreshClients(){
+  const q=$("#clSearch").value.toLowerCase().trim();
+  let rows=(db[tables.clients]||[]).slice();
+  if(q) rows=rows.filter(r=>Object.values(r).some(v=>String(v).toLowerCase().includes(q)));
+  renderTable("#clTable", rows);
+}
+function addClient(){
+  const name = tables.clients || "Clients";
+  const arr = db[name] = db[name] || [];
+  const sample = arr[0] || {"ClientID":"","Name":"","Phone":"","Email":"","Address":""};
+  const row = Object.fromEntries(Object.keys(sample).map(k=>[k,""]));
+  const idF = detectField(sample, ["^client.?id$","^id$"]) || "ClientID";
+  row[idF] = "C-"+Date.now();
+  arr.unshift(row);
+  setData(db); refreshClients();
+}
+
+// ---------- Charts data build ----------
+function renderCharts(){
+  // Status bar
+  const orders=db[tables.orders]||[];
+  if(!orders.length){ drawBar($("#chartStatus"),[],[]); drawLine($("#chartMonthly"),[],[]); return; }
+  const sField = Object.keys(orders[0]).find(k=>/status|статус/i.test(k)) || "";
+  const statusCounts = {};
+  orders.forEach(r=>{ const s=String(r[sField]||"Unknown"); statusCounts[s]=(statusCounts[s]||0)+1; });
+  const sLabels=Object.keys(statusCounts); const sValues=sLabels.map(k=>statusCounts[k]);
+  drawBar($("#chartStatus"), sLabels, sValues);
+
+  // Monthly line (by order date fields guess)
+  const dateField = Object.keys(orders[0]).find(k=>/(date|created|дата)/i.test(k)) || "";
+  const byMonth = {};
+  orders.forEach(r=>{ const raw=String(r[dateField]||""); const m=raw.match(/^(\d{4})-(\d{2})/); const key=m?m[0]:""; if(key) byMonth[key]=(byMonth[key]||0)+1; });
+  const mLabels=Object.keys(byMonth).sort(); const mValues=mLabels.map(k=>byMonth[k]);
+  drawLine($("#chartMonthly"), mLabels, mValues);
+}
+
+// ---------- Navigation ----------
+function show(view){ document.querySelectorAll(".view").forEach(v=>v.hidden=true); document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active")); document.getElementById(view).hidden=false; document.querySelector(`.tab[data-view="${view}"]`).classList.add("active"); }
+
+function boot(){
+  detectTables();
+  renderKPIs(); renderCharts(); populateStatusFilter();
+  refreshClients(); refreshOrders(); refreshInvoices(); refreshPOs();
+}
+
+// ---------- Events ----------
+document.addEventListener("click", (e)=>{ const t=e.target.closest(".tab"); if(t) show(t.dataset.view); });
+addEventListener("load", async ()=>{
+  try{
+    db = getData();
+    if(!db){
+      const resp = await fetch("initial_data.json?v="+VER, {cache:"reload"});
+      db = await resp.json(); setData(db);
+    }
+    boot();
+  }catch(err){ alert("Data load error: "+err.message); console.error(err); }
+});
+document.addEventListener("DOMContentLoaded", ()=>{
+  // Dashboard handled by boot()
+
+  // Clients
+  $("#clSearch").addEventListener("input", refreshClients);
+  $("#clAdd").addEventListener("click", addClient);
+  $("#clSave").addEventListener("click", ()=>{ setData(db); alert("Saved ✅"); });
+
+  // Orders
+  $("#ordersSearch").addEventListener("input", refreshOrders);
+  $("#ordersStatus").addEventListener("change", refreshOrders);
+  $("#btnNewOrder").addEventListener("click", ()=> alert("Guided order creation from v1.3 still works via Start FAB"));
+  $("#saveOrders").addEventListener("click", ()=>{ setData(db); alert("Saved ✅"); });
+
+  // Invoices
+  $("#invoicesSearch").addEventListener("input", refreshInvoices);
+  $("#saveInvoices").addEventListener("click", ()=>{ setData(db); alert("Saved ✅"); });
+
+  // POs
+  $("#posSearch").addEventListener("input", refreshPOs);
+  $("#savePOs").addEventListener("click", ()=>{ setData(db); alert("Saved ✅"); });
+
+  // Tools
+  $("#ciCreate").addEventListener("click", ()=>{ alert("Use guided flow on Start FAB, invoice creation stays as in v1.3"); });
+});
+
+// SW with versioned cache
+if("serviceWorker" in navigator){
+  addEventListener("load", ()=> navigator.serviceWorker.register("service-worker.js?v="+VER).catch(console.error));
+}
+</script>
+</body>
+</html>
