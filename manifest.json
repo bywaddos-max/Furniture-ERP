@@ -1,9 +1,0 @@
-{
-  "name": "Furniture ERP",
-  "short_name": "Furniture ERP",
-  "start_url": "./?v=20250817202541",
-  "display": "standalone",
-  "background_color": "#111111",
-  "theme_color": "#111111",
-  "icons": []
-}
